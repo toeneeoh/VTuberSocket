@@ -7,15 +7,14 @@ using VTuberSocket.Implementations;
 
 public class Tasks
 {
-    private readonly ConsoleVTSLoggerImpl logger;
     public CoreVTSPlugin plugin;
-    public TcpClient? client = null;
+    private readonly ConsoleVTSLoggerImpl logger = new();
+    public TcpClient client = new();
     public bool pluginIsRunning = false;
     public bool isRunning = false;
 
     public Tasks(string pluginName, string authorName)
     {
-        logger = new ConsoleVTSLoggerImpl();
         this.plugin = new(logger, 100, pluginName, authorName, "");
     }
 
@@ -39,29 +38,19 @@ public class Tasks
         this.pluginIsRunning = true;
     }
 
-    public void EstablishConnection(string serverIp, int serverPort)
+    public async Task StartConnection(string serverIp, int serverPort)
     {
-        while (true)
+        try
         {
-            if (client is null)
-            {
-                try
-                {
-                    this.client = new(serverIp, serverPort);
-                    Console.WriteLine($"Connected to {serverIp}:{serverPort}");
-                }
-                catch (Exception)
-                {
-                    Console.WriteLine("Error: failed to establish connection.");
-                }
-            }
-            else if (!client.Connected)
-            {
-                client = null;
-            }
-
-            Thread.Sleep(2000);
+            await client.ConnectAsync(serverIp, serverPort);
+            Console.WriteLine($"Connected to {serverIp}:{serverPort}");
         }
+        catch (Exception)
+        {
+            Console.WriteLine("Error: failed to establish connection.");
+        }
+
+        Thread.Sleep(1000);
     }
 
     public void WaitForInput()
@@ -80,26 +69,29 @@ public class Tasks
         }
     }
 
-    public void WaitForMessage()
+    async public void WaitForMessage()
     {
         while (client is not null)
         {
             // Get the network stream for sending and receiving data
             try
             {
-                NetworkStream stream = client.GetStream();
-
                 // Receive a message
-                byte[] buffer = new byte[1024];
-                int bytesRead = stream.Read(buffer, 0, buffer.Length);
-                string response = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                byte[] receiveBuffer = new byte[1024];
+                int bytesRead = await client.GetStream().ReadAsync(receiveBuffer, 0, receiveBuffer.Length);
 
-                ExecuteCommand(response);
+                if (bytesRead > 0)
+                {
+                    string receivedData = Encoding.ASCII.GetString(receiveBuffer, 0, bytesRead);
+                    ExecuteCommand(receivedData);
+                }
+                else
+                {
+                    Console.WriteLine("No data received.");
+                }
+
             }
-            catch (Exception)
-            {
-                client = null;
-            }
+            catch (Exception) { Console.WriteLine("Something went wrong..."); }
 
             Thread.Sleep(500);
         }
@@ -117,7 +109,7 @@ public class Tasks
             case "connectTCP":
                 try
                 {
-                    await Task.Run(() => EstablishConnection(arguments[1], int.Parse(arguments[2])));
+                    StartConnection(arguments[1], int.Parse(arguments[2]));
                 }
                 catch (Exception) { Console.WriteLine("Invalid arguments, requires IP address and port."); }
 
