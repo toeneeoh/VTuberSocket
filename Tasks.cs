@@ -90,11 +90,10 @@ public class Tasks
                     else if (seconds < 0)
                         seconds = 0;
                 }
-                catch (Exception e) { }
+                catch (Exception e) { logger.LogError(e); }
                 finally
                 {
-                    if (this.plugin is not null)
-                        await RotateModelAsync(this.plugin, rotation, seconds, relative);
+                    await RotateModelAsync(this, rotation, seconds, relative);
                 }
                 break;
         }
@@ -103,7 +102,7 @@ public class Tasks
     /*
      * API Requests
      */
-    private static async Task RotateModelAsync(CoreVTSPlugin plugin, float rotate, float seconds, bool relative)
+    private static async Task RotateModelAsync(Tasks task, float rotate, float seconds, bool relative)
     {
         VTSMoveModelData.Data request = new()
         {
@@ -112,7 +111,12 @@ public class Tasks
             valuesAreRelativeToModel = relative
         };
 
-        await plugin.MoveModelAsync(request);
-    }
+        try
+        {
+            await task.plugin.MoveModelAsync(request);
+        }
+        catch (Exception e) { task.logger.LogError(e);  }
 
+        task.logger.Log("Rotate Model successful.");
+    }
 }
