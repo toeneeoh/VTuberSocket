@@ -8,7 +8,7 @@ Console.Title = "VTubeSocket.exe";
 Tasks PluginTasks = new(pluginName, authorName);
 
 await PluginTasks.StartPlugin();
-//await Task.Run(() => PluginTasks.EstablishConnection(serverIp, serverPort));
+//await PluginTasks.StartConnection(serverIp, serverPort);
 
 // background task
 _ = Task.Run(() => PluginTasks.WaitForMessage());
