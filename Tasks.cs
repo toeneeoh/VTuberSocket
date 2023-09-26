@@ -121,7 +121,7 @@ public class Tasks
             case "connectTCP":
                 try
                 {
-                    StartConnection(arguments[1], int.Parse(arguments[2]));
+                    await StartConnection(arguments[1], int.Parse(arguments[2]));
                 }
                 catch (Exception) { Console.WriteLine("Invalid arguments, requires IP address and port."); }
 
