@@ -1,8 +1,8 @@
 ﻿using VTS.Core;
 using System.Net.Sockets;
 using System.Text;
-using VTuberSocket.Implementations;
 
+namespace VTuberSocket;
 public class Tasks
 {
     private const int UPDATE_INTERVAL_MS = 100;
@@ -18,7 +18,7 @@ public class Tasks
     }
 
     /*
-     * Establish connection to VTube Studio
+     * Establish plugin connection to VTube Studio
      */
     async public Task StartPlugin()
     {
@@ -40,42 +40,24 @@ public class Tasks
     }
 
     /*
-     * Establish connection with TCP Client
-     */
-    public async Task StartConnection(string serverIp, int serverPort)
-    {
-    }
-
-    /*
-     * Receives input from console
+     * Executes string inputs from console or server messages
      */
     public void WaitForInput()
     {
         string? input;
 
         while (true) {
-            input = Console.ReadLine()!;
+            input = TCPServer.GetMessage() ?? Console.ReadLine();
 
-            if(input != null)
-            {
+            if(input is not null)
                 ExecuteCommand(input);
-            }
-
-            Thread.Sleep(500);
         }
     }
 
     /*
-     * Receives messages from TCP Client
+     * Translates string inputs into VTube Studio API requests
      */
-    async public void WaitForMessage()
-    {
-    }
-
-    /*
-     * Handling for command line inputs and messages from TCP Client
-     */
-    async void ExecuteCommand(string input)
+    public async void ExecuteCommand(string input)
     {
         string[] arguments = input.Split(" ");
 
@@ -83,14 +65,6 @@ public class Tasks
         {
             case "connect":
                 await this.StartPlugin();
-                break;
-            case "connectTCP":
-                try
-                {
-                    await StartConnection(arguments[1], int.Parse(arguments[2]));
-                }
-                catch (Exception) { Console.WriteLine("Invalid arguments, requires IP address and port."); }
-
                 break;
             case "disconnect":
                 this.plugin.Disconnect();
@@ -131,11 +105,12 @@ public class Tasks
      */
     private static async Task RotateModelAsync(CoreVTSPlugin plugin, float rotate, float seconds, bool relative)
     {
-        VTSMoveModelData.Data request = new();
-        
-        request.rotation = rotate;
-        request.timeInSeconds = seconds;
-        request.valuesAreRelativeToModel = relative;
+        VTSMoveModelData.Data request = new()
+        {
+            rotation = rotate,
+            timeInSeconds = seconds,
+            valuesAreRelativeToModel = relative
+        };
 
         await plugin.MoveModelAsync(request);
     }
