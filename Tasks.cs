@@ -11,13 +11,15 @@ public class Tasks
     private readonly ConsoleVTSLoggerImpl logger = new();
     public TcpClient client = new();
     public bool pluginIsRunning = false;
-    public bool isRunning = false;
 
     public Tasks(string pluginName, string authorName)
     {
         this.plugin = new(logger, 100, pluginName, authorName, "");
     }
 
+    /*
+     * Establish connection to VTube Studio
+     */
     async public Task StartPlugin()
     {
         var websocket = new WebSocketNetCoreImpl(logger);
@@ -38,6 +40,9 @@ public class Tasks
         this.pluginIsRunning = true;
     }
 
+    /*
+     * Establish connection with TCP Client
+     */
     public async Task StartConnection(string serverIp, int serverPort)
     {
         try
@@ -53,6 +58,9 @@ public class Tasks
         Thread.Sleep(1000);
     }
 
+    /*
+     * Receives input from console
+     */
     public void WaitForInput()
     {
         string? input;
@@ -69,14 +77,15 @@ public class Tasks
         }
     }
 
+    /*
+     * Receives messages from TCP Client
+     */
     async public void WaitForMessage()
     {
         while (client is not null)
         {
-            // Get the network stream for sending and receiving data
             try
             {
-                // Receive a message
                 byte[] receiveBuffer = new byte[1024];
                 int bytesRead = await client.GetStream().ReadAsync(receiveBuffer, 0, receiveBuffer.Length);
 
@@ -97,6 +106,9 @@ public class Tasks
         }
     }
 
+    /*
+     * Handling for command line inputs and messages from TCP Client
+     */
     async void ExecuteCommand(string input)
     {
         string[] arguments = input.Split(" ");
@@ -148,37 +160,9 @@ public class Tasks
         }
     }
 
-    static bool isProcessOpen(string processName)
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            // Windows
-            Process[] processes = Process.GetProcessesByName(processName);
-            return processes.Length > 0;
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            // macOS and Linux
-            Process process = new();
-            process.StartInfo.FileName = "pgrep";
-            process.StartInfo.Arguments = $"-x {processName}";
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.CreateNoWindow = true;
-
-            process.Start();
-            string output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            return !string.IsNullOrEmpty(output);
-        }
-        else
-        {
-            throw new PlatformNotSupportedException("Platform not supported.");
-        }
-    }
-
-    // model behaviors
+    /*
+     * API Requests
+     */
     private static async Task RotateModelAsync(CoreVTSPlugin plugin, float rotate, float seconds, bool relative)
     {
         VTSMoveModelData.Data request = new();
