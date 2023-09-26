@@ -13,8 +13,9 @@ class Setup
         Tasks Plugin = new(pluginName, authorName);
 
         await Plugin.StartPlugin();
-        TCPServer.RunServerAsync(serverIp, serverPort);
+        _ = Task.Run(() => Plugin.WaitForInput());
 
-        Plugin.WaitForInput();
+        TCPServer.StartServer(serverIp, serverPort);
+
     }
 }

@@ -3,12 +3,10 @@ using System.Net;
 using System.Text;
 
 namespace VTuberSocket;
+
 public static class TCPServer
 {
     private const int BufferSize = 1024;
-    private static int Port = 8001;
-    private static IPAddress? localAddr;
-    private static TcpListener? listener;
     private static string? incomingMessage;
 
     public static string? GetMessage()
@@ -20,53 +18,62 @@ public static class TCPServer
         return output;
     }
 
-    async public static void RunServerAsync(string ip, int port)
+    public static int StartServer(string ip, int port)
     {
-        Port = port;
-        localAddr = IPAddress.Parse(ip);
-        listener = new TcpListener(localAddr, Port);
-        listener.Start();
-        Console.WriteLine($"Server started on {localAddr}:{Port}");
+        var localAddr = IPAddress.Parse(ip);
+        TcpListener server = new TcpListener(localAddr, port);
 
         try
         {
-            while(true)
+            server.Start();
+            Console.WriteLine($"Server started on {localAddr}:{port}");
+            Byte[] bytes = new Byte[BufferSize];
+
+            while (true)
             {
-                await Accept(await listener.AcceptTcpClientAsync());
+                TcpClient client = server.AcceptTcpClient();
+                Console.WriteLine("Connected!");
+
+                NetworkStream stream = client.GetStream();
+                int i;
+
+                try
+                {
+                    while (client.Connected && (i = stream.Read(bytes, 0, bytes.Length)) != 0)
+                    {
+                        string data = Encoding.ASCII.GetString(bytes, 0, i);
+                        Console.WriteLine($"Received: {data}");
+
+                        incomingMessage = data;
+
+                        if (data == "SHUTDOWN_SIGNAL")
+                        {
+                            Console.WriteLine("Shutdown signal received. Terminating server.");
+                            return 0;  // exit the application
+                        }
+
+                        byte[] msg = Encoding.ASCII.GetBytes(data.ToUpper());
+
+                        try
+                        {
+                            stream.Write(msg, 0, msg.Length);
+                            Console.WriteLine($"Sent: {data.ToUpper()}");
+                        }
+                        catch (IOException ioEx)
+                        {
+                            Console.WriteLine($"IOException encountered while writing: {ioEx.Message}");
+                            break;  // exit the loop if the client has disconnected
+                        }
+                    }
+                }
+                catch (SocketException ex) { Console.WriteLine($"Client disconnected: {ex.Message}"); }
+                catch (ObjectDisposedException) { Console.WriteLine("NetworkStream has been disposed of."); }
+                finally { client.Close(); }
             }
         }
-        finally { listener.Stop(); }
-    }
+        catch (Exception e) { Console.WriteLine($"Exception: {e}"); }
+        finally { server.Stop(); }
 
-    async static Task Accept(TcpClient client)
-    {
-        await Task.Yield();
-        try
-        {
-            using (client)
-            using (NetworkStream n = client.GetStream())
-            {
-                byte[] data = new byte[BufferSize];
-                int bytesRead = 0;
-                int chunkSize = 1;
-
-                while (bytesRead < data.Length && chunkSize > 0)
-                    bytesRead += chunkSize =
-                        await n.ReadAsync(data, bytesRead, data.Length - bytesRead);
-
-                // get string data
-                incomingMessage = Encoding.Default.GetString(data);
-                Console.WriteLine("[server] received : {0}", incomingMessage);
-
-                // send the result to client
-                string send_str = "server_send_test";
-                byte[] send_data = Encoding.ASCII.GetBytes(send_str);
-                await n.WriteAsync(send_data, 0, send_data.Length);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-        }
+        return 0;
     }
 }

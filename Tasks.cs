@@ -46,11 +46,17 @@ public class Tasks
     {
         string? input;
 
-        while (true) {
-            input = TCPServer.GetMessage() ?? Console.ReadLine();
+        while (true)
+        {
+            input = TCPServer.GetMessage();
+            Console.WriteLine("Input is: " + input);
 
-            if(input is not null)
+            if (input is not null)
+            {
                 ExecuteCommand(input);
+            }
+
+            Thread.Sleep(1000);
         }
     }
 
