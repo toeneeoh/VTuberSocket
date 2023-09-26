@@ -1,20 +1,20 @@
-﻿using System.Runtime.InteropServices;
-using System.Diagnostics;
-using VTS.Core;
+﻿using VTS.Core;
 using System.Net.Sockets;
 using System.Text;
 using VTuberSocket.Implementations;
 
 public class Tasks
 {
-    public CoreVTSPlugin plugin;
+    private const int UPDATE_INTERVAL_MS = 100;
+    private const string ICON_NAME = "";
     private readonly ConsoleVTSLoggerImpl logger = new();
+
+    public CoreVTSPlugin plugin;
     public TcpClient client = new();
-    public bool pluginIsRunning = false;
 
     public Tasks(string pluginName, string authorName)
     {
-        this.plugin = new(logger, 100, pluginName, authorName, "");
+        this.plugin = new(logger, UPDATE_INTERVAL_MS, pluginName, authorName, ICON_NAME);
     }
 
     /*
@@ -37,7 +37,6 @@ public class Tasks
         }
 
         logger.Log("Connected!");
-        this.pluginIsRunning = true;
     }
 
     /*
@@ -45,17 +44,6 @@ public class Tasks
      */
     public async Task StartConnection(string serverIp, int serverPort)
     {
-        try
-        {
-            await client.ConnectAsync(serverIp, serverPort);
-            Console.WriteLine($"Connected to {serverIp}:{serverPort}");
-        }
-        catch (Exception)
-        {
-            Console.WriteLine("Error: failed to establish connection.");
-        }
-
-        Thread.Sleep(1000);
     }
 
     /*
@@ -82,28 +70,6 @@ public class Tasks
      */
     async public void WaitForMessage()
     {
-        while (client is not null)
-        {
-            try
-            {
-                byte[] receiveBuffer = new byte[1024];
-                int bytesRead = await client.GetStream().ReadAsync(receiveBuffer, 0, receiveBuffer.Length);
-
-                if (bytesRead > 0)
-                {
-                    string receivedData = Encoding.ASCII.GetString(receiveBuffer, 0, bytesRead);
-                    ExecuteCommand(receivedData);
-                }
-                else
-                {
-                    Console.WriteLine("No data received.");
-                }
-
-            }
-            catch (Exception) { Console.WriteLine("Something went wrong..."); }
-
-            Thread.Sleep(500);
-        }
     }
 
     /*
