@@ -1,79 +1,71 @@
-﻿using System.Net.Sockets;
+﻿/*
+ * TCPServer.cs
+ *
+ * Manages the TCP server for:
+ * - Receiving incoming JSON requests.
+ * - Sending outgoing responses.
+ * - Maintaining client communications.
+ */
+
+using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
+using Newtonsoft.Json.Linq;
 
-namespace VTuberSocket;
-
-public static class TCPServer
+namespace VTuberSocket
 {
-    private const int BufferSize = 1024;
-    private static string? incomingMessage;
-
-    public static string? GetMessage()
+    public static class TCPServer
     {
-        string? output = incomingMessage;
+        private static readonly ConcurrentQueue<JObject> _reqQ = new();
+        private static readonly ConcurrentQueue<string> _resQ = new();
 
-        incomingMessage = null;
+        // Retrieve request or return null if empty
+        public static JObject? GetRequest() => _reqQ.TryDequeue(out var r) ? r : null;
 
-        return output;
-    }
+        // Add a response to the outgoing queue
+        public static void SendResponse(string response) => _resQ.Enqueue(response);
 
-    public static int StartServer(string ip, int port)
-    {
-        var localAddr = IPAddress.Parse(ip);
-        TcpListener server = new TcpListener(localAddr, port);
-
-        try
+        // Start the TCP server and listen for client connections
+        public static int StartServer(string ip, int port)
         {
-            server.Start();
-            Console.WriteLine($"Server started on {localAddr}:{port}");
-            Byte[] bytes = new Byte[BufferSize];
-
-            while (true)
+            var addr = IPAddress.Parse(ip);
+            var server = new TcpListener(addr, port);
+            try
             {
-                TcpClient client = server.AcceptTcpClient();
-                Console.WriteLine("Connected!");
-
-                NetworkStream stream = client.GetStream();
-                int i;
-
-                try
-                {
-                    while (client.Connected && (i = stream.Read(bytes, 0, bytes.Length)) != 0)
-                    {
-                        string data = Encoding.ASCII.GetString(bytes, 0, i);
-                        Console.WriteLine($"Received: {data}");
-
-                        incomingMessage = data;
-
-                        if (data == "SHUTDOWN_SIGNAL")
-                        {
-                            Console.WriteLine("Shutdown signal received. Terminating server.");
-                            return 0;  // exit the application
-                        }
-
-                        byte[] msg = Encoding.ASCII.GetBytes(data.ToUpper());
-
-                        try
-                        {
-                            stream.Write(msg, 0, msg.Length);
-                            Console.WriteLine($"Sent: {data.ToUpper()}");
-                        }
-                        catch (IOException ioEx)
-                        {
-                            Console.WriteLine($"IOException encountered while writing: {ioEx.Message}");
-                            break;  // exit the loop if the client has disconnected
-                        }
-                    }
-                }
-                catch (SocketException ex) { Console.WriteLine($"Client disconnected: {ex.Message}"); }
-                catch (ObjectDisposedException) { Console.WriteLine("NetworkStream has been disposed of."); }
-                finally { client.Close(); }
+                server.Start();
+                Console.WriteLine($"Server started on {addr}:{port}");
+                while (true) HandleClient(server.AcceptTcpClient());  // Listen continuously
             }
+            catch (Exception e) { Console.WriteLine($"Error: {e.Message}"); }
+            finally { server.Stop(); }
+            return 0;
         }
-        catch (Exception e) { Console.WriteLine($"Exception: {e}"); }
-        finally { server.Stop(); }
 
-        return 0;
+        // Process communications with a specific client
+        private static void HandleClient(TcpClient client)
+        {
+            using var stream = client.GetStream();
+            var buffer = new byte[1024];
+
+            // Read data and if valid JSON, add to queue
+            while (stream.Read(buffer, 0, 1024) is int bytesRead && bytesRead > 0)
+            {
+                var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                if (data == "SHUTDOWN_SIGNAL") Environment.Exit(0);
+                if (TryParseJson(data, out var request) && request != null) _reqQ.Enqueue(request);
+            }
+
+            // Send the response if available
+            if (_resQ.TryDequeue(out var response))
+                stream.Write(Encoding.UTF8.GetBytes(response), 0, response.Length);
+        }
+
+        // Convert string data to JSON if possible
+        private static bool TryParseJson(string data, out JObject? json)
+        {
+            try { json = JObject.Parse(data); return true; }
+            catch { json = null; return false; }
+        }
     }
 }
