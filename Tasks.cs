@@ -1,128 +1,98 @@
-﻿using VTS.Core;
-using System.Net.Sockets;
-using System.Text;
+﻿/*
+ * Tasks.cs
+ *
+ * Handles core VTuber plugin functionalities:
+ * - Initializes and starts the VTuber plugin.
+ * - Processes and forwards incoming requests.
+ * - Manages request types
+ */
+    
+using Newtonsoft.Json.Linq;
+using VTS.Core;
+using System.Threading.Tasks;
+using System;
 
-namespace VTuberSocket;
-public class Tasks
+namespace VTuberSocket
 {
-    private const int UPDATE_INTERVAL_MS = 100;
-    private const string ICON_NAME = "";
-    private readonly ConsoleVTSLoggerImpl logger = new();
-
-    public CoreVTSPlugin plugin;
-    public TcpClient client = new();
-
-    public Tasks(string pluginName, string authorName)
+    public class Tasks
     {
-        this.plugin = new(logger, UPDATE_INTERVAL_MS, pluginName, authorName, ICON_NAME);
-    }
+        private readonly ConsoleVTSLoggerImpl _logger = new();
+        public CoreVTSPlugin Plugin;
 
-    /*
-     * Establish plugin connection to VTube Studio
-     */
-    async public Task StartPlugin()
-    {
-        var websocket = new WebSocketNetCoreImpl(logger);
-        var jsonUtility = new NewtonsoftJsonUtilityImpl();
-        var tokenStorage = new TokenStorageImpl("");
+        public Tasks(string pluginName, string authorName) =>
+            Plugin = new(_logger, 100, pluginName, authorName, "");
 
-        try
+        // Initialize and start the plugin
+        public async Task StartPlugin()
         {
-            await plugin.InitializeAsync(websocket, jsonUtility, tokenStorage,
-                () => logger.LogWarning("Disconnected!"));
-        }
-        catch (VTSException e)
-        {
-            logger.LogError(e);
-        }
-
-        logger.Log("Connected!");
-    }
-
-    /*
-     * Executes string inputs from console or server messages
-     */
-    public void WaitForInput()
-    {
-        string? input;
-
-        while (true)
-        {
-            input = TCPServer.GetMessage();
-            Console.WriteLine("Input is: " + input);
-
-            if (input is not null)
+            try
             {
-                ExecuteCommand(input);
+                var ws = new WebSocketNetCoreImpl(_logger);
+                await Plugin.InitializeAsync(ws, new NewtonsoftJsonUtilityImpl(), 
+                    new TokenStorageImpl(""), () => _logger.LogWarning("Disconnected!"));
+                _logger.Log("Connected!");
             }
-
-            Thread.Sleep(1000);
+            catch (VTSException e) { _logger.LogError(e); }
         }
-    }
 
-    /*
-     * Translates string inputs into VTube Studio API requests
-     */
-    public async void ExecuteCommand(string input)
-    {
-        string[] arguments = input.Split(" ");
-
-        switch (arguments[0])
+        // Continuously listen for and send requests
+        public void WaitForInput()
         {
-            case "connect":
-                await this.StartPlugin();
-                break;
-            case "disconnect":
-                this.plugin.Disconnect();
-                break;
-            case "rotate":
-                float rotation = 180f;
-                float seconds = 1f;
-                bool relative = true;
+            while (true) { SendRequest(TCPServer.GetRequest()); Thread.Sleep(500); }
+        }
 
-                try
+        // Send request based on input type
+        private async void SendRequest(JObject? input)
+        {
+            if (input == null) return;
+            try
+            {
+                switch (input.Value<string>("messageType"))
                 {
-                    rotation = float.Parse(arguments[1]);
-                    seconds = float.Parse(arguments[2]);
-                    relative = bool.Parse(arguments[3]);
+                    case "MoveModelRequest": 
+                        HandleMoveModelRequest(input, "MoveModelRequest"); 
+                        break;
 
-                    if (rotation > 360)
-                        rotation = 360;
-                    else if (rotation < -360)
-                        rotation = -360;
+                    case "HotkeyTriggerRequest": 
+                        await ExecLog(() => Plugin.TriggerHotkeyAsync(input.Value<string>("hotkeyID")), 
+                            "HotkeyTriggerRequest");
+                        break;
 
-                    if (seconds > 2)
-                        seconds = 2;
-                    else if (seconds < 0)
-                        seconds = 0;
+                    case "CurrentModelRequest": 
+                        Plugin.GetCurrentModel(a => TCPServer.SendResponse(Plugin.JsonUtility.ToJson(a)), 
+                            b => _logger.LogError(b.data.message)); 
+                        break;
+
+                    case "ModelLoadRequest": 
+                        await ExecLog(() => Plugin.LoadModelAsync(input.Value<string>("modelID")), 
+                            "ModelLoadRequest"); 
+                        break;
                 }
-                catch (Exception e) { logger.LogError(e); }
-                finally
-                {
-                    await RotateModelAsync(this, rotation, seconds, relative);
-                }
-                break;
+            }
+            catch (Exception e) { _logger.LogError(e); }
         }
-    }
 
-    /*
-     * API Requests
-     */
-    private static async Task RotateModelAsync(Tasks task, float rotate, float seconds, bool relative)
-    {
-        VTSMoveModelData.Data request = new()
+        // Handle MoveModelRequest specifics
+        private async void HandleMoveModelRequest(JObject input, string messageType)
         {
-            rotation = rotate,
-            timeInSeconds = seconds,
-            valuesAreRelativeToModel = relative
-        };
-
-        try
-        {
-            await task.plugin.MoveModelAsync(request);
+            var data = input.Value<JToken>("data")?.ToObject<VTSMoveModelData.Data>();
+            if (data != null)
+            {
+                data.timeInSeconds = Math.Clamp(data.timeInSeconds, 0, 2);
+                data.rotation = Math.Clamp(data.rotation, -360, 360);
+                data.positionX = Math.Clamp(data.positionX, -1000, 1000);
+                data.positionY = Math.Clamp(data.positionY, -1000, 1000);
+                data.size = Math.Clamp(data.size, -100, 100);
+                await ExecLog(() => Plugin.MoveModelAsync(data), messageType);
+            }
+            else { _logger.LogWarning($"{messageType} is empty!"); }
         }
-        catch (Exception e) { task.logger.LogError(e);  }
 
-        task.logger.Log("Rotate Model successful.");
+        // Execute task and log results
+        private async Task ExecLog(Func<Task> action, string msgType)
+        {
+            try { await action(); _logger.Log($"{msgType} succeeded."); } 
+            catch (Exception e) { _logger.LogError(e); }
+        }
     }
 }
