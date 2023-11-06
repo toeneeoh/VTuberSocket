@@ -1,14 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Basic properties of the project -->
   <PropertyGroup>
+    <!-- Specifies the output type for the project. In this case, an executable. -->
     <OutputType>Exe</OutputType>
+
+    <!-- Sets the .NET version that this project targets. -->
     <TargetFramework>net7.0</TargetFramework>
+
+    <!-- Enables implicit namespace imports, reducing the need for explicit 'using' statements. -->
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Enables nullable reference types, allowing better null-checking in C#. -->
     <Nullable>enable</Nullable>
+
+    <!-- Sets a custom name for the resulting assembly. -->
+    <AssemblyName>AIVTuberInterface</AssemblyName>
+
+    <!-- Specifies the version of the C# language to be used. -->
+    <LangVersion>10.0</LangVersion>
+
+    <!-- Configures the compiler to treat warnings as errors, ensuring code quality. -->
+    <WarningsAsErrors>true</WarningsAsErrors>
+
+    <!-- Suppress the NU1701 warning. -->
+    <NoWarn>NU1701</NoWarn>
   </PropertyGroup>
 
+  <!-- References to NuGet packages used in this project -->
   <ItemGroup>
-    <PackageReference Include="VTS-Sharp-Core" Version="2.0.1.1" />
+    <!-- Reference to the vts-sharp-core package. -->
+    <PackageReference Include="vts-sharp-core" Version="2.0.1.1" />
   </ItemGroup>
 
 </Project>
